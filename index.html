@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090909"><title>MEKA JOTS</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#090909;color:#f5f5f5;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:980px;margin:auto;padding:22px 16px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.brand{font-weight:900;letter-spacing:.14em}.brand b{color:#4da3ff}.card{background:#111;border:1px solid #292929;border-radius:18px;padding:20px}.auth{max-width:430px;margin:12vh auto}.auth h1{font-size:34px;margin:14px 0 5px}.muted{color:#999;line-height:1.55}.hero{display:grid;grid-template-columns:1fr 300px;gap:14px;margin-bottom:14px}.date,.meta{color:#999;font-size:13px}.hero h1{font-size:34px;margin:8px 0}.stat{display:inline-block;background:#0b0b0b;border:1px solid #292929;padding:10px 14px;border-radius:12px;margin-top:14px}.stat strong{display:block;font-size:22px}.field{margin:14px 0}.field label{display:block;color:#bbb;font-size:13px;margin-bottom:7px}.field input,.field textarea,.search{width:100%;background:#0b0b0b;border:1px solid #292929;border-radius:11px;padding:12px;color:#fff;outline:none}.field textarea{min-height:160px;resize:vertical}.btn{border:1px solid #333;background:#202020;color:#fff;border-radius:11px;padding:11px 15px;font-weight:700}.primary{background:#fff;color:#080808;border-color:#fff}.danger{background:#321717;color:#ffaaaa}.actions{display:flex;gap:8px;flex-wrap:wrap}.moods{display:flex;gap:7px;flex-wrap:wrap}.mood{border:1px solid #333;background:#161616;color:#ddd;border-radius:999px;padding:8px 11px}.mood.active{border-color:#4da3ff;background:#102b48}.section{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:25px 0 12px}.section h2{font-size:18px}.jots{display:grid;gap:12px}.jot{background:#101010;border:1px solid #292929;border-radius:17px;padding:17px}.jothead{display:flex;justify-content:space-between;gap:12px}.jot h3{margin:0 0 5px}.jot p{white-space:pre-wrap;line-height:1.65;color:#ddd}.empty{text-align:center;padding:45px;color:#999}.error{color:#ff9292;font-size:13px;margin-top:10px}.footer{text-align:center;color:#555;font-size:12px;margin-top:30px}@media(max-width:720px){.hero{grid-template-columns:1fr}.section{flex-direction:column;align-items:stretch}}
+</style></head><body><div id="app"><main class="wrap"><section class="card auth"><div class="brand">MEKA <b>JOTS</b></div><h1>Loading your journal…</h1><p class="muted">Connecting securely.</p></section></main></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+"use strict";
+var client=supabase.createClient("https://baoqyhhyenimfhkrwspn.supabase.co","sb_publishable_o20CnPYPZC6czgwTKIfAVA_M4XFA0Dy");
+var app=document.getElementById("app"),user=null,jots=[],editing=null,mood="",query="";
+function esc(s){return String(s||"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos"}).format(new Date())}
+function fmt(d){return new Date(d+"T12:00:00").toLocaleDateString("en-NG",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+function authScreen(msg){
+app.innerHTML='<main class="wrap"><section class="card auth"><div class="brand">MEKA <b>JOTS</b></div><h1>Your days, kept.</h1><p class="muted">A private space for your thoughts, feelings and progress.</p><div class="field"><label>Email</label><input id="email" type="email"></div><div class="field"><label>Password</label><input id="pass" type="password"></div><div class="actions"><button class="btn primary" id="login">Log in</button><button class="btn" id="signup">Create account</button></div><div class="error">'+esc(msg||"")+'</div></section></main>';
+document.getElementById("login").onclick=function(){auth(false)};document.getElementById("signup").onclick=function(){auth(true)};
+}
+async function auth(signup){
+var email=document.getElementById("email").value.trim(),password=document.getElementById("pass").value;
+if(!email||password.length<6){authScreen("Use a valid email and a password of at least 6 characters.");return}
+var r=signup?await client.auth.signUp({email:email,password:password}):await client.auth.signInWithPassword({email:email,password:password});
+if(r.error){authScreen(r.error.message);return}
+if(signup&&!r.data.session){authScreen("Account created. Check your email, confirm it, then log in.");return}
+user=r.data.user;await load();render();
+}
+async function load(){
+var r=await client.from("meka_jots").select("*").order("entry_date",{ascending:false}).order("created_at",{ascending:false});
+if(r.error){alert(r.error.message);return}jots=r.data||[];
+}
+function editor(j){
+var x=j||{},ms=["😊 Good","😐 Okay","😔 Low","😤 Frustrated","🔥 Motivated","😌 Peaceful"];
+return '<section class="card" id="editor"><div class="date">'+fmt(x.entry_date||today())+'</div><h2>'+(j?"Edit your jot":"Write today")+'</h2><div class="field"><label>Title (optional)</label><input id="title" value="'+esc(x.title)+'" placeholder="What is today about?"></div><div class="field"><label>How are you feeling?</label><div class="moods">'+ms.map(function(v){return '<button class="mood '+(mood===v?"active":"")+'" data-mood="'+esc(v)+'">'+v+'</button>'}).join("")+'</div></div><div class="field"><label>Your thoughts</label><textarea id="content" placeholder="Write freely. No performance required.">'+esc(x.content)+'</textarea></div><div class="field"><label>Progress</label><textarea id="progress" style="min-height:100px" placeholder="What moved forward today?">'+esc(x.progress)+'</textarea></div><div class="field"><label>Tomorrow</label><textarea id="tomorrow" style="min-height:90px" placeholder="What matters tomorrow?">'+esc(x.tomorrow)+'</textarea></div><div class="actions"><button class="btn primary" id="save">'+(j?"Save changes":"Save jot")+'</button><button class="btn" id="cancel">Cancel</button></div></section>';
+}
+function render(){
+var list=jots.filter(function(j){var q=query.toLowerCase();return !q||[j.title,j.content,j.progress,j.tomorrow,j.mood].some(function(v){return String(v||"").toLowerCase().indexOf(q)>-1})});
+app.innerHTML='<main class="wrap"><header class="top"><div class="brand">MEKA <b>JOTS</b></div><button class="btn" id="logout">Log out</button></header><section class="hero"><div class="card"><div class="date">'+fmt(today())+'</div><h1>How was your day?</h1><p class="muted">Write honestly. Track what changed. Keep the record.</p><div class="stat"><strong>'+jots.length+'</strong><span class="meta">jots written</span></div></div><div class="card"><div class="date">Private journal</div><h3>'+esc(user.email)+'</h3><p class="muted">Your entries are protected by database-level access rules.</p><button class="btn primary" id="new">+ New jot</button></div></section>'+(editing!==null?editor(editing?jots.find(function(x){return x.id===editing}):null):"")+'<div class="section"><h2>Your journey</h2><input class="search" id="search" placeholder="Search your jots..." value="'+esc(query)+'"></div><div class="jots">'+(list.length?list.map(function(j){return '<article class="jot"><div class="jothead"><div><h3>'+esc(j.title||"Untitled day")+'</h3><div class="meta">'+fmt(j.entry_date)+(j.mood?" · "+esc(j.mood):"")+'</div></div><div class="actions"><button class="btn edit" data-id="'+j.id+'">Edit</button><button class="btn danger del" data-id="'+j.id+'">Delete</button></div></div>'+(j.content?'<p>'+esc(j.content)+'</p>':"")+(j.progress?'<div class="meta">Progress: '+esc(j.progress)+'</div>':"")+'</article>'}).join(""):'<div class="card empty">No jots yet. Start with today.</div>')+'</div><div class="footer">MEKA JOTS · private by design</div></main>';
+document.getElementById("logout").onclick=async function(){await client.auth.signOut();user=null;authScreen("")};
+document.getElementById("new").onclick=function(){editing="";mood="";render();document.getElementById("editor").scrollIntoView({behavior:"smooth"})};
+document.getElementById("search").oninput=function(e){query=e.target.value;render();var s=document.getElementById("search");s.focus();s.setSelectionRange(query.length,query.length)};
+document.querySelectorAll(".edit").forEach(function(b){b.onclick=function(){editing=b.dataset.id;var j=jots.find(function(x){return x.id===editing});mood=j.mood||"";render();document.getElementById("editor").scrollIntoView({behavior:"smooth"})}});
+document.querySelectorAll(".del").forEach(function(b){b.onclick=async function(){if(!confirm("Delete this jot permanently?"))return;var r=await client.from("meka_jots").delete().eq("id",b.dataset.id);if(r.error)alert(r.error.message);else{await load();render()}}});
+var c=document.getElementById("cancel");if(c)c.onclick=function(){editing=null;mood="";render()};
+document.querySelectorAll(".mood").forEach(function(b){b.onclick=function(){mood=b.dataset.mood;document.querySelectorAll(".mood").forEach(function(x){x.classList.toggle("active",x===b)})}});
+var save=document.getElementById("save");if(save)save.onclick=saveJot;
+}
+async function saveJot(){
+var old=editing?jots.find(function(x){return x.id===editing}):null;
+var p={user_id:user.id,entry_date:old?old.entry_date:today(),title:document.getElementById("title").value.trim(),content:document.getElementById("content").value.trim(),mood:mood||null,progress:document.getElementById("progress").value.trim()||null,tomorrow:document.getElementById("tomorrow").value.trim()||null};
+if(!p.content&&!p.progress&&!p.tomorrow){alert("Write something first.");return}
+var r=editing?await client.from("meka_jots").update(p).eq("id",editing):await client.from("meka_jots").insert(p);
+if(r.error)alert(r.error.message);else{editing=null;mood="";await load();render()}
+}
+client.auth.getSession().then(async function(r){if(r.data.session){user=r.data.session.user;await load();render()}else authScreen("")}).catch(function(){authScreen("Unable to connect. Please refresh.")});
+client.auth.onAuthStateChange(function(event){if(event==="SIGNED_OUT"){user=null;authScreen("")}});
+})();
+</script></body></html>
